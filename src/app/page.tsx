@@ -3,6 +3,9 @@
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { useId, useState } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { Button } from "~/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "~/components/ui/avatar";
 
 interface PDFInfo {
   text: string;
@@ -24,6 +27,7 @@ interface APIResponse {
 }
 
 export default function Home() {
+  const { data: session } = useSession();
   const id = useId();
   const [pdfInfo, setPdfInfo] = useState<PDFInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -72,48 +76,63 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
-      <div className="space-y-6 w-full max-w-2xl">
-        <div className="space-y-2">
-          <Label htmlFor={id}>Upload PDF</Label>
-          <Input
-            id={id}
-            className="p-0 pe-3 file:me-3 file:border-0 file:border-e"
-            type="file"
-            accept=".pdf"
-            onChange={handleFileChange}
-            disabled={isLoading}
-          />
-        </div>
-
-        {isLoading && (
-          <div className="text-center">Processing PDF...</div>
+    <div className="min-h-screen p-4">
+      <div className="fixed top-0 right-0 p-4">
+        {session ? (
+          <Avatar className="w-10 h-10">
+            <AvatarImage src={session.user?.image ?? ''} alt={session.user?.name ?? ''} />
+            <AvatarFallback>{session.user?.name?.[0] ?? '?'}</AvatarFallback>
+          </Avatar>
+        ) : (
+          <Button variant="outline" onClick={() => signIn('google')}>
+            Sign in
+          </Button>
         )}
+      </div>
 
-        {error && (
-          <div className="text-red-500 text-center">{error}</div>
-        )}
-
-        {pdfInfo && (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>PDF Information:</Label>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>Number of Pages:</div>
-                <div>{pdfInfo.numPages}</div>
-                <div>Version:</div>
-                <div>{pdfInfo.version}</div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Extracted Text:</Label>
-              <div className="p-4 border rounded-lg bg-gray-50 whitespace-pre-wrap max-h-[400px] overflow-y-auto">
-                {pdfInfo.text}
-              </div>
-            </div>
+      <div className="flex flex-col items-center justify-center pt-16">
+        <div className="space-y-6 w-full max-w-2xl">
+          <div className="space-y-2">
+            <Label htmlFor={id}>Upload PDF</Label>
+            <Input
+              id={id}
+              className="p-0 pe-3 file:me-3 file:border-0 file:border-e"
+              type="file"
+              accept=".pdf"
+              onChange={handleFileChange}
+              disabled={isLoading}
+            />
           </div>
-        )}
+
+          {isLoading && (
+            <div className="text-center">Processing PDF...</div>
+          )}
+
+          {error && (
+            <div className="text-red-500 text-center">{error}</div>
+          )}
+
+          {pdfInfo && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>PDF Information:</Label>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>Number of Pages:</div>
+                  <div>{pdfInfo.numPages}</div>
+                  <div>Version:</div>
+                  <div>{pdfInfo.version}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Extracted Text:</Label>
+                <div className="p-4 border rounded-lg bg-gray-50 whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                  {pdfInfo.text}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

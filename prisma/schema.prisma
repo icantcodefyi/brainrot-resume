@@ -11,7 +11,7 @@ datasource db {
     // Further reading:
     // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
     // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
-    url      = env("DATABASE_URL")
+    url      = env("DB_URL")
 }
 
 model Post {
@@ -63,6 +63,7 @@ model User {
     accounts      Account[]
     sessions      Session[]
     posts         Post[]
+    resumes       Resume[]
 }
 
 model VerificationToken {
@@ -71,4 +72,47 @@ model VerificationToken {
     expires    DateTime
 
     @@unique([identifier, token])
+}
+
+model Resume {
+    id         String          @id @default(cuid())
+    createdAt  DateTime        @default(now())
+    updatedAt  DateTime        @updatedAt
+    userId     String
+    user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+    title      String
+    resumeUrl  String
+    rawContent String          @db.Text
+    sections   ResumeSection[]
+    video      Video?
+
+    @@index([userId])
+}
+
+model ResumeSection {
+    id       String @id @default(cuid())
+    resumeId String
+    resume   Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+    type     String // e.g., "education", "experience", "skills"
+    title    String
+    content  String @db.Text
+    order    Int
+
+    @@index([resumeId])
+}
+
+model Video {
+    id           String   @id @default(cuid())
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+    resumeId     String   @unique
+    resume       Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+    status       String // "pending", "processing", "completed", "failed"
+    videoUrl     String?
+    subtitlesUrl String?
+    duration     Int? // in seconds
+    aiScript     String?  @db.Text // AI generated script for the video
+    errorMessage String?  @db.Text
+
+    @@index([resumeId])
 }
