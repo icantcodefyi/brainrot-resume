@@ -11,14 +11,13 @@ interface PDFInfo {
 }
 
 /**
- * Extracts text content from a PDF file
- * @param filePath Path to the PDF file
+ * Extracts text content from a PDF file or buffer
+ * @param input Path to PDF file, URL, or Buffer containing PDF data
  * @returns Promise containing the extracted text
  */
-export async function extractTextFromPDF(filePath: string): Promise<string> {
+export async function extractTextFromPDF(input: string | Buffer): Promise<string> {
     try {
-        // Read the PDF file
-        const dataBuffer = readFileSync(filePath);
+        const dataBuffer = await getDataBuffer(input);
         
         // Parse the PDF
         const data = await pdfParse(dataBuffer) as PDFInfo;
@@ -32,13 +31,34 @@ export async function extractTextFromPDF(filePath: string): Promise<string> {
 }
 
 /**
+ * Helper function to get buffer from various input types
+ */
+async function getDataBuffer(input: string | Buffer): Promise<Buffer> {
+    if (Buffer.isBuffer(input)) {
+        return input;
+    }
+
+    if (input.startsWith('http://') || input.startsWith('https://')) {
+        const response = await fetch(input);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch PDF from URL: ${response.statusText}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+    }
+
+    // Assume it's a local file path
+    return readFileSync(input);
+}
+
+/**
  * Extended version that returns more PDF information
- * @param filePath Path to the PDF file
+ * @param input Path to PDF file, URL, or Buffer containing PDF data
  * @returns Promise containing PDF data including text, number of pages, metadata, etc.
  */
-export async function getPDFInfo(filePath: string) {
+export async function getPDFInfo(input: string | Buffer) {
     try {
-        const dataBuffer = readFileSync(filePath);
+        const dataBuffer = await getDataBuffer(input);
         const data = await pdfParse(dataBuffer) as PDFInfo;
         
         return {

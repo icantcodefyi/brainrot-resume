@@ -8,7 +8,7 @@ const model = google('gemini-2.0-flash');
 const resumeSchema = z.object({
   personalInfo: z.object({
     name: z.string().describe('Full name of the person'),
-    email: z.string().email().describe('Email address'),
+    email: z.string().describe('Email address of the person'),
     phone: z.string().optional().describe('Phone number if available'),
     location: z.string().optional().describe('Location/address if available'),
     linkedIn: z.string().optional().describe('LinkedIn profile URL if available')

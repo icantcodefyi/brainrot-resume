@@ -6,6 +6,7 @@ import { useId, useState } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { Button } from "~/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "~/components/ui/avatar";
+import { useUploadThing } from "~/utils/uploadthing";
 
 interface PDFInfo {
   text: string;
@@ -17,13 +18,16 @@ interface PDFInfo {
 }
 
 interface APIResponse {
+  success?: boolean;
   error?: string;
-  text?: string;
-  numPages?: number;
-  numRendered?: number;
-  info?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-  version?: string;
+  resumeId?: string;
+  fileUrl?: string;
+  parsedContent?: unknown;
+  rawText?: string;
+}
+
+interface UploadResponse {
+  url: string;
 }
 
 export default function Home() {
@@ -32,6 +36,15 @@ export default function Home() {
   const [pdfInfo, setPdfInfo] = useState<PDFInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
+  const { startUpload } = useUploadThing("resumeUploader", {
+    onClientUploadComplete: () => {
+      console.log("Upload completed");
+    },
+    onUploadError: (error: Error) => {
+      console.error("Upload error:", error);
+      setError(error.message);
+    },
+  });
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,8 +55,17 @@ export default function Home() {
     setPdfInfo(null);
 
     try {
+      // 1. Upload file to UploadThing first
+      const uploadResponse = await startUpload([file]) as UploadResponse[] | undefined;
+      
+      if (!uploadResponse?.[0]?.url) {
+        throw new Error("Failed to upload file");
+      }
+
+      // 2. Send file and URL to our API for processing
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("fileUrl", uploadResponse[0].url);
 
       const response = await fetch("/api/pdf", {
         method: "POST",
@@ -52,24 +74,23 @@ export default function Home() {
 
       const data = await response.json() as APIResponse;
 
-      if (!response.ok) {
+      if (!response.ok || data.error) {
         throw new Error(data.error ?? "Failed to process PDF");
       }
 
-      if (!data.text) {
-        throw new Error("No text content found in PDF");
+      if (data.parsedContent && data.rawText) {
+        setPdfInfo({
+          text: data.rawText,
+          numPages: 1, // We'll update these later if needed
+          numRendered: 1,
+          info: {},
+          metadata: {},
+          version: "1.0",
+        });
       }
-
-      setPdfInfo({
-        text: data.text,
-        numPages: data.numPages ?? 0,
-        numRendered: data.numRendered ?? 0,
-        info: data.info ?? {},
-        metadata: data.metadata ?? {},
-        version: data.version ?? ''
-      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      console.error("Error processing PDF:", err);
+      setError(err instanceof Error ? err.message : "Failed to process PDF");
     } finally {
       setIsLoading(false);
     }

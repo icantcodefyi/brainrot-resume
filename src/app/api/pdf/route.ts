@@ -1,9 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getPDFInfo } from "~/server/utils/pdf-parse";
 import { parseResumeWithAI } from "~/server/utils/ai-parse";
-import { writeFile } from "fs/promises";
-import { join } from "path";
-import { tmpdir } from "os";
 import { db } from "~/server/db";
 import { auth } from "~/server/auth";
 
@@ -19,42 +16,38 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const resumeId = formData.get("resumeId") as string;
+    const file = formData.get("file");
+    const fileUrl = formData.get("fileUrl");
 
-    if (!file || !resumeId) {
+    if (!file || !(file instanceof File)) {
       return NextResponse.json(
-        { error: "No file or resumeId provided" },
+        { error: "No PDF file provided" },
         { status: 400 }
       );
     }
 
-    // Check if file is PDF
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
+    if (!fileUrl || typeof fileUrl !== "string") {
       return NextResponse.json(
-        { error: "File must be a PDF" },
+        { error: "No file URL provided" },
         { status: 400 }
       );
     }
 
-    // Create a temporary file path
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    
-    // Save to temporary file
-    const tempPath = join(tmpdir(), `upload-${Date.now()}.pdf`);
-    await writeFile(tempPath, buffer);
+    // 1. Get the file buffer for parsing
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-    // Extract text from PDF
-    const pdfInfo = await getPDFInfo(tempPath);
+    // 2. Extract text from PDF using the buffer
+    const pdfInfo = await getPDFInfo(fileBuffer);
     
-    // Parse the content with AI
+    // 3. Parse the content with AI
     const parsedResume = await parseResumeWithAI(pdfInfo.text);
 
-    // Update the resume with extracted content and structured sections
-    await db.resume.update({
-      where: { id: resumeId },
+    // 4. Create a new resume record with parsed content
+    const resume = await db.resume.create({
       data: {
+        userId: session.user.id,
+        resumeUrl: fileUrl,
+        title: parsedResume.personalInfo?.name ?? file.name ?? "Untitled Resume",
         rawContent: pdfInfo.text,
         sections: {
           create: [
@@ -94,14 +87,17 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ 
-      success: true, 
+      success: true,
+      resumeId: resume.id,
+      fileUrl: fileUrl,
       parsedContent: parsedResume,
       rawText: pdfInfo.text 
     });
   } catch (error) {
     console.error('Error processing PDF:', error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to process PDF";
     return NextResponse.json(
-      { error: "Failed to process PDF" },
+      { error: errorMessage },
       { status: 500 }
     );
   }
