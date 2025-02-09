@@ -1,37 +1,120 @@
-import Link from "next/link";
+'use client';
 
-export default function HomePage() {
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
+import { useId, useState } from "react";
+
+interface PDFInfo {
+  text: string;
+  numPages: number;
+  numRendered: number;
+  info: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  version: string;
+}
+
+interface APIResponse {
+  error?: string;
+  text?: string;
+  numPages?: number;
+  numRendered?: number;
+  info?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  version?: string;
+}
+
+export default function Home() {
+  const id = useId();
+  const [pdfInfo, setPdfInfo] = useState<PDFInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>("");
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    setError("");
+    setPdfInfo(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/pdf", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json() as APIResponse;
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Failed to process PDF");
+      }
+
+      if (!data.text) {
+        throw new Error("No text content found in PDF");
+      }
+
+      setPdfInfo({
+        text: data.text,
+        numPages: data.numPages ?? 0,
+        numRendered: data.numRendered ?? 0,
+        info: data.info ?? {},
+        metadata: data.metadata ?? {},
+        version: data.version ?? ''
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#2e026d] to-[#15162c] text-white">
-      <div className="container flex flex-col items-center justify-center gap-12 px-4 py-16">
-        <h1 className="text-5xl font-extrabold tracking-tight text-white sm:text-[5rem]">
-          Create <span className="text-[hsl(280,100%,70%)]">T3</span> App
-        </h1>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-8">
-          <Link
-            className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20"
-            href="https://create.t3.gg/en/usage/first-steps"
-            target="_blank"
-          >
-            <h3 className="text-2xl font-bold">First Steps →</h3>
-            <div className="text-lg">
-              Just the basics - Everything you need to know to set up your
-              database and authentication.
-            </div>
-          </Link>
-          <Link
-            className="flex max-w-xs flex-col gap-4 rounded-xl bg-white/10 p-4 text-white hover:bg-white/20"
-            href="https://create.t3.gg/en/introduction"
-            target="_blank"
-          >
-            <h3 className="text-2xl font-bold">Documentation →</h3>
-            <div className="text-lg">
-              Learn more about Create T3 App, the libraries it uses, and how to
-              deploy it.
-            </div>
-          </Link>
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <div className="space-y-6 w-full max-w-2xl">
+        <div className="space-y-2">
+          <Label htmlFor={id}>Upload PDF</Label>
+          <Input
+            id={id}
+            className="p-0 pe-3 file:me-3 file:border-0 file:border-e"
+            type="file"
+            accept=".pdf"
+            onChange={handleFileChange}
+            disabled={isLoading}
+          />
         </div>
+
+        {isLoading && (
+          <div className="text-center">Processing PDF...</div>
+        )}
+
+        {error && (
+          <div className="text-red-500 text-center">{error}</div>
+        )}
+
+        {pdfInfo && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>PDF Information:</Label>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>Number of Pages:</div>
+                <div>{pdfInfo.numPages}</div>
+                <div>Version:</div>
+                <div>{pdfInfo.version}</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Extracted Text:</Label>
+              <div className="p-4 border rounded-lg bg-gray-50 whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                {pdfInfo.text}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </main>
+    </div>
   );
 }
